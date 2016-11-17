@@ -68,6 +68,13 @@ class MPR121(object):
     def __init__(self):
         """Create an instance of the MPR121 device."""
         # Nothing to do here since there is very little state in the class.
+
+	# save thresholds as variables, because set_threshold() only seems
+	# to work the first time its called. Now, you can define thresholds 
+	# with store_thresholds() before calling begin() from your app and
+	# it'll work
+	self.store_thr_touch = 12
+	self.store_thr_release = 6
         pass
 
     def begin(self, address=MPR121_I2CADDR_DEFAULT, i2c=None, **kwargs):
@@ -90,6 +97,7 @@ class MPR121(object):
             I2C.require_repeated_start()
         # Save a reference to the I2C device instance for later communication.
         self._device = i2c.get_i2c_device(address, **kwargs)
+	print("Begin")
         return self._reset()
 
     def _reset(self):
@@ -103,7 +111,7 @@ class MPR121(object):
         if c != 0x24:
            return False
         # Set threshold for touch and release to default values.
-        self.set_thresholds(12, 6)
+        self.set_thresholds(self.store_thr_touch, self.store_thr_release)
         # Configure baseline filtering control registers.
         self._i2c_retry(self._device.write8, MPR121_MHDR, 0x01)
         self._i2c_retry(self._device.write8, MPR121_NHDR, 0x01)
@@ -123,6 +131,7 @@ class MPR121(object):
         # Enable all electrodes.
         self._i2c_retry(self._device.write8, MPR121_ECR, 0x8F) # start with first 5 bits of baseline tracking
         # All done, everything succeeded!
+	print("Reset")
         return True
 
     def _i2c_retry(self, func, *params):
@@ -145,6 +154,12 @@ class MPR121(object):
             if count >= MAX_I2C_RETRIES:
                 raise RuntimeError('Exceeded maximum number or retries attempting I2C communication!')
 
+    def store_thresholds(self, touch, release):
+	self.store_thr_touch = touch
+	self.store_thr_release = release
+
+    # watch out: this function only seems to work the first time it is called
+    # from within _reset() but not when you call it after, from your app
     def set_thresholds(self, touch, release):
         """Set the touch and release threshold for all inputs to the provided
         values.  Both touch and release should be a value between 0 to 255
@@ -152,6 +167,12 @@ class MPR121(object):
         """
         assert touch >= 0 and touch <= 255, 'touch must be between 0-255 (inclusive)'
         assert release >= 0 and release <= 255, 'release must be between 0-255 (inclusive)'
+
+	self.store_thr_touch = touch
+	self.store_thr_release = release
+
+	print("Set thresholds:  touch ", touch, "\t release ", release)
+
         # Set the touch and release register value for all the inputs.
         for i in range(12):
             self._i2c_retry(self._device.write8, MPR121_TOUCHTH_0 + 2*i, touch)
